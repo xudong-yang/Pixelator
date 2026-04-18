@@ -27,6 +27,7 @@
 		898B4B422F932D6E00480172 /* Pixelator.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pixelator.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		898B4B4F2F932D7000480172 /* PixelatorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PixelatorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		898B4B592F932D7000480172 /* PixelatorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PixelatorUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		898DF4B92F93DD7C008F8FE8 /* AGENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AGENTS.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +76,7 @@
 		898B4B392F932D6E00480172 = {
 			isa = PBXGroup;
 			children = (
+				898DF4B92F93DD7C008F8FE8 /* AGENTS.md */,
 				898B4B442F932D6E00480172 /* Pixelator */,
 				898B4B522F932D7000480172 /* PixelatorTests */,
 				898B4B5C2F932D7000480172 /* PixelatorUITests */,

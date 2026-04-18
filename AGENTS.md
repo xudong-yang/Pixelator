@@ -47,6 +47,10 @@ The image is aspect-ratio scaled to fit inside the canvas, then centered. The fu
 
 ## Coding Rules
 
+**No comments in production code.** Never add comments unless explicitly requested. Write self-documenting code instead.
+
+**No trailing whitespace.** No space in empty lines. Use trailing newline (exactly one) at file end.
+
 **Explicitness over cleverness.** If there are two ways to write something and one is shorter but requires thinking, use the longer one. This codebase will be read under time pressure.
 
 **No force-unwrap in production paths.** Never use `!` on optionals except in compile-time-guaranteed contexts. Everywhere else: guard-let, if-let, or `throws`.
