@@ -40,6 +40,19 @@ final class PixelatorDocument: ObservableObject, ReferenceFileDocument {
         self.compositor = ImageCompositor()
     }
 
+    static func preview() -> PixelatorDocument {
+        let size = 1
+        guard let ctx = CGContext(
+            data: nil, width: size, height: size,
+            bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ), let image = ctx.makeImage() else {
+            fatalError("Failed to create preview image")
+        }
+        return PixelatorDocument(image: image)
+    }
+
     func snapshot(contentType: UTType) throws -> Snapshot {
         guard let flattenedImage = compositor.flatten(sourceImage: sourceImage, regions: regions) else {
             throw CocoaError(.fileWriteUnknown)

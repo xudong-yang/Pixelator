@@ -21,7 +21,7 @@ Pixelator is a single-purpose macOS image editor. The user opens an image, drags
 PixelatorApp.swift          — @main, DocumentGroup scene only
 PixelatorDocument.swift     — all document model logic
 PixelatedRegion.swift       — plain value type, no logic
-CGImage+Empty.swift         — 1×1 placeholder for new-document path
+PixelatorDocument.preview()   — static factory for previews
 ContentView.swift           — canvas + gesture + toolbar (to be built)
 CoordinateMapper.swift      — viewToImageCoordinates(), isolated + testable
 PixelatorTests/
@@ -49,7 +49,7 @@ The image is aspect-ratio scaled to fit inside the canvas, then centered. The fu
 
 **Explicitness over cleverness.** If there are two ways to write something and one is shorter but requires thinking, use the longer one. This codebase will be read under time pressure.
 
-**No force-unwrap in production paths.** The `CGImage+Empty.swift` file uses `!` because it's a compile-time-guaranteed context creation. That's the exception, not the pattern. Everywhere else: guard-let, if-let, or `throws`.
+**No force-unwrap in production paths.** Never use `!` on optionals except in compile-time-guaranteed contexts. Everywhere else: guard-let, if-let, or `throws`.
 
 **One responsibility per file.** `PixelatorDocument` does document logic. `CoordinateMapper` does coordinate math. `ContentView` does layout and gesture handling. Don't let these bleed into each other.
 
