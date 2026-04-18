@@ -10,8 +10,8 @@ import SwiftUI
 @main
 struct PixelatorApp: App {
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        DocumentGroup(newDocument: { PixelatorDocument(image: .empty) }) { file in
+            Text("Editor goes here")
         }
     }
 }

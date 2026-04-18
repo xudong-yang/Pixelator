@@ -6,3 +6,9 @@
 //
 
 import Foundation
+import CoreGraphics
+
+struct PixelatedRegion: Equatable {
+    let rect: CGRect
+    let pixelSize: CGFloat
+}
