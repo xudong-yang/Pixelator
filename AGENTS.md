@@ -95,3 +95,54 @@ If a feature isn't in the architecture paragraph above, don't add it without a c
 ## When You're Unsure
 
 Read the architecture paragraph again. If the thing you're about to build doesn't serve "open image → drag → pixelate → save", you're probably off-track. The best code in this project is code that isn't written.
+
+## Zoom and Pan (Important Patterns)
+
+### State Location
+Zoom and pan are ephemeral UI state — they belong in `ContentView` as `@State`, not in the document. Use:
+- `zoomScale: CGFloat` — 1.0 = fit to window, > 1.0 = zoomed in
+- `panOffset: CGSize` — pixel offset applied after zoom transform
+- `scrollPosition: CGSize` — tracks ScrollView content offset for pan gesture
+
+### Two-Finger Scroll Pan (macOS)
+Two-finger trackpad scroll on macOS does **not** route through `DragGesture`. Use a `ScrollView` as an event sink:
+
+1. Create a `ScrollView([.horizontal, .vertical], showsIndicators: false)` wrapped around a `Color.clear` spacer.
+2. Set the spacer's frame to the zoomed image dimensions: `baseRect.size * zoomScale`. This gives the ScrollView real scrollable content.
+3. Attach `.onScrollGeometryChange(for: CGPoint.self) { $0.contentOffset }` to detect scroll deltas.
+4. Set `.allowsHitTesting(false)` on the Canvas overlay so it doesn't intercept scroll events.
+5. Compute delta as `newOffset - scrollPosition`, negate it (scroll direction is opposite to pan), apply to `panOffset`, then clamp.
+6. Track `scrollPosition` separately and guard the first event to prevent jumps (see known issues below).
+
+### Coordinate Mapping with Zoom/Pan
+When zoom/pan are active, the coordinate mapper must account for them:
+
+```swift
+func viewToImageCoordinates(
+    viewPoint: CGPoint,
+    viewSize: CGSize,
+    imageSize: CGSize,
+    zoomScale: CGFloat,
+    panOffset: CGSize
+) -> CGPoint {
+    // 1. Undo pan: viewPoint - panOffset
+    // 2. Undo zoom: result / zoomScale
+    // 3. Apply existing base viewToImageCoordinates logic
+}
+```
+
+### Pan Clamping (Known Issues)
+The pan clamping formula is complex and has known issues. The current implementation in `clampPanOffset` may not allow reaching all edges of a zoomed image, especially with letterboxed/pillarboxed layouts. Future work may require:
+- Asymmetric min/max bounds per axis
+- Testing with various image aspect ratios (landscape, portrait, square)
+- Manual verification of all four directions (left, right, up, down)
+
+### Scroll Position Sync (Known Issue)
+There's a known bug where the first scroll event after zooming can cause an image jump. The current guard helps but may not fully resolve it:
+```swift
+guard scrollPosition != .zero || oldOffset == .zero else {
+    scrollPosition = newOffset
+    return
+}
+```
+This should be revisited if pan feels wrong on the first scroll after a zoom change.
