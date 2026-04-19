@@ -57,6 +57,10 @@ struct ContentView: View {
                     geometry.contentOffset
                 } action: { oldOffset, newOffset in
                     guard zoomScale > 1.0 else { return }
+                    guard scrollPosition != .zero || oldOffset == .zero else {
+                        scrollPosition = newOffset
+                        return
+                    }
                     let delta = CGSize(
                         width: newOffset.x - scrollPosition.x,
                         height: newOffset.y - scrollPosition.y
