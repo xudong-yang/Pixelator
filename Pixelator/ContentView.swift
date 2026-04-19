@@ -122,12 +122,12 @@ struct ContentView: View {
                         lastMagnification = 1.0
                     }
             )
-            .onChange(of: zoomScale) { _, _ in
-                panOffset = clampPanOffset(panOffset, viewSize: viewSize, imageSize: imageSize)
-            }
             .onChange(of: zoomScale) { oldValue, newValue in
                 if newValue == 1.0 {
+                    panOffset = .zero
                     scrollPosition = .zero
+                } else {
+                    panOffset = clampPanOffset(panOffset, viewSize: viewSize, imageSize: imageSize)
                 }
             }
         }
@@ -211,17 +211,24 @@ struct ContentView: View {
     }
 
     private func clampPanOffset(_ offset: CGSize, viewSize: CGSize, imageSize: CGSize) -> CGSize {
+        guard zoomScale > 1.0 else { return .zero }
+
         let baseRect = fittingRect(imageSize: imageSize, in: viewSize)
-        let scaledWidth = baseRect.width * zoomScale
-        let scaledHeight = baseRect.height * zoomScale
+        let drawnW = baseRect.width * zoomScale
+        let drawnH = baseRect.height * zoomScale
+        let drawnOriginX = baseRect.origin.x * zoomScale
+        let drawnOriginY = baseRect.origin.y * zoomScale
 
-        let minOverlap = min(100.0, min(scaledWidth, scaledHeight) / 2)
+        let margin = min(100.0, min(drawnW, drawnH) / 2)
 
-        let maxOffsetX = max(0, (scaledWidth - minOverlap) - (viewSize.width - minOverlap))
-        let maxOffsetY = max(0, (scaledHeight - minOverlap) - (viewSize.height - minOverlap))
+        let maxOffsetX = max(margin - drawnOriginX, 0)
+        let minOffsetX = min(viewSize.width - margin - drawnOriginX - drawnW, 0)
 
-        let clampedX = min(max(offset.width, -maxOffsetX), maxOffsetX)
-        let clampedY = min(max(offset.height, -maxOffsetY), maxOffsetY)
+        let maxOffsetY = max(margin - drawnOriginY, 0)
+        let minOffsetY = min(viewSize.height - margin - drawnOriginY - drawnH, 0)
+
+        let clampedX = min(max(offset.width, minOffsetX), maxOffsetX)
+        let clampedY = min(max(offset.height, minOffsetY), maxOffsetY)
 
         return CGSize(width: clampedX, height: clampedY)
     }
