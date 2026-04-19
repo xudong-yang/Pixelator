@@ -82,4 +82,8 @@ final class PixelatorDocument: ObservableObject, ReferenceFileDocument {
             doc.addRegion(removed, undoManager: undoManager)
         }
     }
+
+    var renderedImage: CGImage {
+        compositor.flatten(sourceImage: sourceImage, regions: regions) ?? sourceImage
+    }
 }

@@ -34,6 +34,7 @@ struct ContentView: View {
                 width:  document.sourceImage.width,
                 height: document.sourceImage.height
             )
+            let _ = document.regions // Track for canvas invalidation
 
             Canvas { ctx, size in
                 drawImage(ctx: ctx, size: size)
@@ -69,11 +70,10 @@ struct ContentView: View {
     // MARK: - Drawing
 
     private func drawImage(ctx: GraphicsContext, size: CGSize) {
-        let image = document.sourceImage
-        let imageSize = CGSize(width: image.width, height: image.height)
+        let image = document.renderedImage
+        let imageSize = CGSize(width: document.sourceImage.width, height: document.sourceImage.height)
         let destRect  = fittingRect(imageSize: imageSize, in: size)
 
-        // SwiftUI GraphicsContext handles the coordinate-flip for CGImage.
         let resolved = ctx.resolve(
             Image(decorative: image, scale: 1, orientation: .up)
         )
