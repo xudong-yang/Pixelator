@@ -209,4 +209,77 @@ struct CoordinateMapperTests {
         #expect(abs(rect.width  - 200)  < accuracy)
         #expect(abs(rect.height - 100)  < accuracy)
     }
+
+    // MARK: - Zoom/Pan-aware mapping tests
+
+    @Test func zoomPan_identity_matchesOriginalBehavior() {
+        // zoomScale=1.0, panOffset=zero must produce identical results to the original function.
+        let viewPoint = CGPoint(x: 50, y: 50)
+        let resultWithZoom = viewToImageCoordinates(
+            viewPoint: viewPoint,
+            viewSize:  CGSize(width: 100, height: 100),
+            imageSize: CGSize(width: 200, height: 100),
+            zoomScale: 1.0,
+            panOffset: .zero
+        )
+        let resultWithout = viewToImageCoordinates(
+            viewPoint: viewPoint,
+            viewSize:  CGSize(width: 100, height: 100),
+            imageSize: CGSize(width: 200, height: 100)
+        )
+        #expect(abs(resultWithZoom.x - resultWithout.x) < accuracy)
+        #expect(abs(resultWithZoom.y - resultWithout.y) < accuracy)
+    }
+
+    @Test func zoom2_noPan_imageCentreUnchanged() {
+        // With 2x zoom and no pan, centre of the image area stays at centre of view.
+        // View centre (50,50) → image centre (100,50).
+        let result = viewToImageCoordinates(
+            viewPoint: CGPoint(x: 50, y: 50),
+            viewSize:  CGSize(width: 100, height: 100),
+            imageSize: CGSize(width: 200, height: 100),
+            zoomScale: 2.0,
+            panOffset: .zero
+        )
+        assertPoint(result, x: 100, y: 50)
+    }
+
+    @Test func zoom2_withPan_offsetApplied() {
+        // Pan the image right by 50 points (positive width shifts right).
+        // Then point at view centre (50,50) should map to where (0,50) was before pan.
+        // (0,50) in view → image (100,50) at zoom=1 (no letterbox: scale=0.5, offsetY=25)
+        // With 2x zoom: unpan first: (50-50, 50-0) = (0, 50), then unzoom: (0/2, 50/2) = (0, 25)
+        // Then apply fittingRect: (0 - 0) / 0.5 = 0, (25 - 25) / 0.5 = 0.
+        let result = viewToImageCoordinates(
+            viewPoint: CGPoint(x: 50, y: 50),
+            viewSize:  CGSize(width: 100, height: 100),
+            imageSize: CGSize(width: 200, height: 100),
+            zoomScale: 2.0,
+            panOffset: CGSize(width: 50, height: 0)
+        )
+        assertPoint(result, x: 0, y: 0)
+    }
+
+    @Test func zoom2_pointInLetterbox_atZoomedView() {
+        // With 2x zoom, the letterbox area is different.
+        // At zoom=2, scaled image = 200×100 (100×50 scaled to 200×100, centered in 100×100 view would overflow).
+        // Actually: fit rect at zoom=1 is (0,25,100,50). At zoom=2, that becomes (0,50,200,100).
+        // The view is 100×100, so there's no letterbox visible at zoom=2 - the image overflows the view.
+        // Let's use a portrait image instead where letterbox exists at zoom=2.
+        // Portrait 100×200 in 100×100: fit rect at zoom=1: (25,0,50,100). At zoom=2: (50,0,100,200).
+        // Still overflows. Let's test point that's clearly in the pillarbox at zoom=2.
+        // Use landscape 200x100 at zoom=2: image fills view horizontally, still no letterbox.
+        // Let's test a point that after pan would be in the non-image area.
+        // At zoom=2 with panOffset(50,0): image shifted right by 50.
+        // View point (10, 50): unpan -> (-40, 50), unzoom -> (-20, 25).
+        // fittingRect offsetY=25: (-20 - 0)/0.5 = -40, (25-25)/0.5 = 0 -> clamped to (0,0).
+        let result = viewToImageCoordinates(
+            viewPoint: CGPoint(x: 10, y: 50),
+            viewSize:  CGSize(width: 100, height: 100),
+            imageSize: CGSize(width: 200, height: 100),
+            zoomScale: 2.0,
+            panOffset: CGSize(width: 50, height: 0)
+        )
+        assertPoint(result, x: 0, y: 0)
+    }
 }

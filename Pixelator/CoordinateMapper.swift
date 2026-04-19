@@ -84,3 +84,60 @@ func viewToImageRect(
         height: corner.y - origin.y
     )
 }
+
+// MARK: - Zoom/Pan-aware coordinate mapping
+
+func viewToImageCoordinates(
+    viewPoint: CGPoint,
+    viewSize: CGSize,
+    imageSize: CGSize,
+    zoomScale: CGFloat,
+    panOffset: CGSize
+) -> CGPoint {
+    guard viewSize.width > 0, viewSize.height > 0,
+          imageSize.width > 0, imageSize.height > 0,
+          zoomScale > 0 else {
+        return .zero
+    }
+
+    let unpanX = viewPoint.x - panOffset.width
+    let unpanY = viewPoint.y - panOffset.height
+
+    let unzoomedX = unpanX / zoomScale
+    let unzoomedY = unpanY / zoomScale
+
+    return viewToImageCoordinates(
+        viewPoint: CGPoint(x: unzoomedX, y: unzoomedY),
+        viewSize: viewSize,
+        imageSize: imageSize
+    )
+}
+
+func viewToImageRect(
+    viewRect: CGRect,
+    viewSize: CGSize,
+    imageSize: CGSize,
+    zoomScale: CGFloat,
+    panOffset: CGSize
+) -> CGRect {
+    let origin = viewToImageCoordinates(
+        viewPoint: viewRect.origin,
+        viewSize: viewSize,
+        imageSize: imageSize,
+        zoomScale: zoomScale,
+        panOffset: panOffset
+    )
+    let corner = viewToImageCoordinates(
+        viewPoint: CGPoint(x: viewRect.maxX, y: viewRect.maxY),
+        viewSize: viewSize,
+        imageSize: imageSize,
+        zoomScale: zoomScale,
+        panOffset: panOffset
+    )
+    return CGRect(
+        x: origin.x,
+        y: origin.y,
+        width: corner.x - origin.x,
+        height: corner.y - origin.y
+    )
+}

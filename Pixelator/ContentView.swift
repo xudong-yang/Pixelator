@@ -12,13 +12,18 @@ struct ContentView: View {
     @ObservedObject var document: PixelatorDocument
     @Environment(\.undoManager) private var undoManager
 
-    // Drag state — both points are in Canvas local (view) space.
     @State private var dragStart: CGPoint? = nil
     @State private var dragCurrent: CGPoint? = nil
-
     @State private var pixelSize: Double = 20
 
-    // The live rubber-band rect in view space, or nil when no drag is active.
+    @State private var zoomScale: CGFloat = 1.0
+    @State private var panOffset: CGSize = .zero
+    @State private var lastMagnification: CGFloat = 1.0
+    @State private var scrollPosition: CGPoint = .zero
+
+    private let minZoom: CGFloat = 1.0
+    private let maxZoom: CGFloat = 20.0
+
     private var liveViewRect: CGRect? {
         guard let start = dragStart, let current = dragCurrent else { return nil }
         return CGRect(
@@ -33,15 +38,47 @@ struct ContentView: View {
         GeometryReader { geometry in
             let viewSize = geometry.size
             let imageSize = CGSize(
-                width:  document.sourceImage.width,
+                width: document.sourceImage.width,
                 height: document.sourceImage.height
             )
-            let _ = document.regions // Track for canvas invalidation
+            let baseRect = fittingRect(imageSize: imageSize, in: viewSize)
+            let zoomedContentSize = CGSize(
+                width: baseRect.width * zoomScale,
+                height: baseRect.height * zoomScale
+            )
+            let _ = document.regions
 
-            Canvas { ctx, size in
-                drawImage(ctx: ctx, size: size)
-                drawOverlay(ctx: ctx, size: size)
+            ZStack {
+                ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                    Color.clear
+                        .frame(width: zoomedContentSize.width, height: zoomedContentSize.height)
+                }
+                .onScrollGeometryChange(for: CGPoint.self) { geometry in
+                    geometry.contentOffset
+                } action: { oldOffset, newOffset in
+                    guard zoomScale > 1.0 else { return }
+                    let delta = CGSize(
+                        width: newOffset.x - scrollPosition.x,
+                        height: newOffset.y - scrollPosition.y
+                    )
+                    scrollPosition = newOffset
+
+                    if delta.width != 0 || delta.height != 0 {
+                        panOffset = CGSize(
+                            width: panOffset.width - delta.width,
+                            height: panOffset.height - delta.height
+                        )
+                        panOffset = clampPanOffset(panOffset, viewSize: viewSize, imageSize: imageSize)
+                    }
+                }
+
+                Canvas { ctx, size in
+                    drawImage(ctx: ctx, size: size, viewSize: viewSize)
+                    drawOverlay(ctx: ctx, size: size)
+                }
+                .allowsHitTesting(false)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .gesture(
                 DragGesture(minimumDistance: 2, coordinateSpace: .local)
                     .onChanged { value in
@@ -50,13 +87,45 @@ struct ContentView: View {
                         }
                         dragCurrent = value.location
                     }
-                    .onEnded { value in
+                    .onEnded { _ in
                         commitDrag(viewSize: viewSize, imageSize: imageSize)
-                        dragStart   = nil
+                        dragStart = nil
                         dragCurrent = nil
                     }
             )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .simultaneousGesture(
+                MagnificationGesture()
+                    .onChanged { value in
+                        let delta = value / max(lastMagnification, 0.001)
+                        lastMagnification = value
+
+                        let baseRectInner = fittingRect(imageSize: imageSize, in: viewSize)
+                        let pinchCentre = CGPoint(
+                            x: baseRectInner.midX + panOffset.width,
+                            y: baseRectInner.midY + panOffset.height
+                        )
+
+                        let newScale = min(max(zoomScale * delta, minZoom), maxZoom)
+                        let scaleRatio = newScale / zoomScale
+
+                        let adjustedPanX = pinchCentre.x - scaleRatio * (pinchCentre.x - panOffset.width)
+                        let adjustedPanY = pinchCentre.y - scaleRatio * (pinchCentre.y - panOffset.height)
+
+                        zoomScale = newScale
+                        panOffset = CGSize(width: adjustedPanX, height: adjustedPanY)
+                    }
+                    .onEnded { _ in
+                        lastMagnification = 1.0
+                    }
+            )
+            .onChange(of: zoomScale) { _, _ in
+                panOffset = clampPanOffset(panOffset, viewSize: viewSize, imageSize: imageSize)
+            }
+            .onChange(of: zoomScale) { oldValue, newValue in
+                if newValue == 1.0 {
+                    scrollPosition = .zero
+                }
+            }
         }
         .toolbar {
             ToolbarItem(placement: .automatic) {
@@ -65,11 +134,20 @@ struct ContentView: View {
                         .font(.caption)
                         .padding(.leading)
                     Slider(value: $pixelSize, in: 1...50)
-                    .frame(width: 150.0)
-                    .accessibilityLabel("Pixel Size")
+                        .frame(width: 150.0)
+                        .accessibilityLabel("Pixel Size")
                 }
             }
             ToolbarItemGroup {
+                Button("Fit") {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        zoomScale = 1.0
+                        panOffset = .zero
+                        scrollPosition = .zero
+                    }
+                }
+                .keyboardShortcut("0", modifiers: .command)
+
                 Button("Undo") {
                     undoManager?.undo()
                 }
@@ -79,29 +157,32 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Drawing
-
-    private func drawImage(ctx: GraphicsContext, size: CGSize) {
+    private func drawImage(ctx: GraphicsContext, size: CGSize, viewSize: CGSize) {
         let image = document.renderedImage
         let imageSize = CGSize(width: document.sourceImage.width, height: document.sourceImage.height)
-        let destRect  = fittingRect(imageSize: imageSize, in: size)
+        let baseRect = fittingRect(imageSize: imageSize, in: viewSize)
+
+        let transformedRect = CGRect(
+            x: baseRect.origin.x * zoomScale + panOffset.width,
+            y: baseRect.origin.y * zoomScale + panOffset.height,
+            width: baseRect.width * zoomScale,
+            height: baseRect.height * zoomScale
+        )
 
         let resolved = ctx.resolve(
             Image(decorative: image, scale: 1, orientation: .up)
         )
-        ctx.draw(resolved, in: destRect)
+        ctx.draw(resolved, in: transformedRect)
     }
 
     private func drawOverlay(ctx: GraphicsContext, size: CGSize) {
         guard let rect = liveViewRect, rect.width > 0, rect.height > 0 else { return }
 
-        // Semi-transparent fill.
         ctx.fill(
             Path(rect),
             with: .color(.accentColor.opacity(0.15))
         )
 
-        // 1 pt stroke.
         ctx.stroke(
             Path(rect),
             with: .color(.accentColor),
@@ -109,43 +190,52 @@ struct ContentView: View {
         )
     }
 
-    // MARK: - Gesture → Document
-
     private func commitDrag(viewSize: CGSize, imageSize: CGSize) {
         guard let rect = liveViewRect,
               rect.width > 1, rect.height > 1 else { return }
 
         let imageRect = viewToImageRect(
-            viewRect:  rect,
-            viewSize:  viewSize,
-            imageSize: imageSize
+            viewRect: rect,
+            viewSize: viewSize,
+            imageSize: imageSize,
+            zoomScale: zoomScale,
+            panOffset: panOffset
         )
 
         let region = PixelatedRegion(rect: imageRect, pixelSize: CGFloat(pixelSize))
         document.addRegion(region, undoManager: undoManager)
     }
+
+    private func clampPanOffset(_ offset: CGSize, viewSize: CGSize, imageSize: CGSize) -> CGSize {
+        let baseRect = fittingRect(imageSize: imageSize, in: viewSize)
+        let scaledWidth = baseRect.width * zoomScale
+        let scaledHeight = baseRect.height * zoomScale
+
+        let minOverlap = min(100.0, min(scaledWidth, scaledHeight) / 2)
+
+        let maxOffsetX = max(0, (scaledWidth - minOverlap) - (viewSize.width - minOverlap))
+        let maxOffsetY = max(0, (scaledHeight - minOverlap) - (viewSize.height - minOverlap))
+
+        let clampedX = min(max(offset.width, -maxOffsetX), maxOffsetX)
+        let clampedY = min(max(offset.height, -maxOffsetY), maxOffsetY)
+
+        return CGSize(width: clampedX, height: clampedY)
+    }
 }
 
-// MARK: - Layout helper
-
-/// Returns the CGRect that centres `imageSize` aspect-ratio-fitted inside `viewSize`.
-/// This is the canonical source of truth for image placement; the Canvas draw call
-/// and the gesture handler must both use this function.
 func fittingRect(imageSize: CGSize, in viewSize: CGSize) -> CGRect {
     guard imageSize.width > 0, imageSize.height > 0,
-          viewSize.width  > 0, viewSize.height  > 0 else {
+          viewSize.width > 0, viewSize.height > 0 else {
         return CGRect(origin: .zero, size: viewSize)
     }
-    let scale = min(viewSize.width  / imageSize.width,
+    let scale = min(viewSize.width / imageSize.width,
                     viewSize.height / imageSize.height)
-    let w = imageSize.width  * scale
+    let w = imageSize.width * scale
     let h = imageSize.height * scale
-    let x = (viewSize.width  - w) / 2
+    let x = (viewSize.width - w) / 2
     let y = (viewSize.height - h) / 2
     return CGRect(x: x, y: y, width: w, height: h)
 }
-
-// MARK: - Preview
 
 private func makePreviewDocument() -> PixelatorDocument {
     let size = 1
