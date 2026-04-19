@@ -16,6 +16,8 @@ struct ContentView: View {
     @State private var dragStart: CGPoint? = nil
     @State private var dragCurrent: CGPoint? = nil
 
+    @State private var pixelSize: Double = 20
+
     // The live rubber-band rect in view space, or nil when no drag is active.
     private var liveViewRect: CGRect? {
         guard let start = dragStart, let current = dragCurrent else { return nil }
@@ -57,6 +59,16 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .toolbar {
+            ToolbarItem(placement: .automatic) {
+                HStack {
+                    Text("Pixel Size: \(Int(pixelSize))")
+                        .font(.caption)
+                        .padding(.leading)
+                    Slider(value: $pixelSize, in: 1...50)
+                    .frame(width: 150.0)
+                    .accessibilityLabel("Pixel Size")
+                }
+            }
             ToolbarItemGroup {
                 Button("Undo") {
                     undoManager?.undo()
@@ -109,8 +121,7 @@ struct ContentView: View {
             imageSize: imageSize
         )
 
-        // Default pixel size: 10 pt (user-adjustable in a future toolbar).
-        let region = PixelatedRegion(rect: imageRect, pixelSize: 10)
+        let region = PixelatedRegion(rect: imageRect, pixelSize: CGFloat(pixelSize))
         document.addRegion(region, undoManager: undoManager)
     }
 }
